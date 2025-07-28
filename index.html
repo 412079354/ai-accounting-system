@@ -1,0 +1,581 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI会计分录生成系统</title>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 1000px; margin: 0 auto; padding: 20px; line-height: 1.6; }
+        .container { background-color: #f5f5f5; padding: 20px; border-radius: 8px; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
+        h1 { color: #333; text-align: center; }
+        .section { margin-bottom: 30px; padding: 20px; background-color: white; border-radius: 8px; }
+        h2 { color: #4CAF50; border-bottom: 2px solid #f0f0f0; padding-bottom: 10px; }
+        .upload-area { border: 2px dashed #ccc; padding: 30px; text-align: center; margin: 20px 0; cursor: pointer; transition: all 0.3s; }
+        .upload-area:hover { border-color: #4CAF50; background-color: #f9f9f9; }
+        .upload-area input { display: none; }
+        .file-list { margin-top: 15px; }
+        .file-item { display: flex; justify-content: space-between; align-items: center; padding: 10px; background-color: #f9f9f9; margin-bottom: 5px; border-radius: 4px; }
+        .file-item button { background-color: #ff4444; color: white; border: none; padding: 5px 10px; border-radius: 3px; cursor: pointer; }
+        label { display: block; margin: 15px 0 5px; font-weight: bold; }
+        input, select, textarea { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px; margin-bottom: 10px; }
+        button { background-color: #4CAF50; color: white; padding: 12px 20px; border: none; border-radius: 4px; cursor: pointer; font-size: 16px; margin-right: 10px; }
+        button:hover { background-color: #45a049; }
+        .verify-section { margin-top: 20px; padding: 15px; background-color: #f9f9f9; border-radius: 4px; display: none; }
+        .summary-item { margin: 10px 0; padding: 10px; background-color: white; border-left: 4px solid #4CAF50; border-radius: 4px; }
+        .status-message { padding: 10px; margin: 15px 0; border-radius: 4px; display: none; }
+        .success { background-color: #dff0d8; color: #3c763d; }
+        .error { background-color: #f2dede; color: #a94442; }
+        .loading { background-color: #d9edf7; color: #31708f; text-align: center; padding: 20px; }
+        .tabs { display: flex; margin-bottom: 20px; }
+        .tab { padding: 10px 20px; background-color: #eee; border: none; cursor: pointer; flex: 1; margin-right: 5px; color: #555; }
+        .tab.active { background-color: #4CAF50; color: white; }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+        
+        /* 日志容器样式 */
+        .log-container { margin-top: 30px; padding: 15px; background-color: #f5f5f5; border-radius: 8px; }
+        .log-content { max-height: 200px; overflow-y: auto; margin-top: 10px; padding: 10px; background-color: #fff; border-radius: 4px; font-family: monospace; font-size: 14px; }
+        .log-error { color: #dc3545; margin: 5px 0; }
+        .log-info { color: #28a745; margin: 5px 0; }
+        
+        /* 文件上传区域水平排列样式 */
+        #fileUpload.tab-content.active {
+            display: flex !important;
+            flex-direction: column !important;
+            gap: 15px !important;
+            padding-bottom: 15px !important;
+        }
+
+        .upload-sections {
+            display: flex !important;
+            flex-direction: row !important;
+            gap: 15px !important;
+            overflow-x: auto !important;
+            padding-bottom: 15px !important;
+        }
+
+        #fileUpload.tab-content .section {
+            flex: 1 0 250px !important; /* 将基础宽度从300px调整为250px */
+            margin-bottom: 0 !important;
+            min-width: 250px !important; /* 将最小宽度从300px调整为250px */
+        }
+
+        #fileUpload.tab-content .section h2 {
+            font-size: 16px !important;
+            padding-bottom: 5px !important;
+        }
+
+        #fileUpload.tab-content .upload-area {
+            padding: 20px !important;
+            min-height: 120px !important;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>AI会计分录生成系统</h1>
+
+        <div class="tabs">
+            <button class="tab active" onclick="openTab(event, 'fileUpload')">文件上传</button>
+            <button class="tab" onclick="openTab(event, 'manualEntry')">手动录入</button>
+            <button class="tab" onclick="openTab(event, 'settings')">AI设置</button>
+        </div>
+
+        <!-- AI设置标签页 -->
+        <div id="settings" class="tab-content">
+            <div class="section">
+                <h2>AI模型配置</h2>
+                <div class="setting-item">
+                    <label for="aiModel">选择AI模型：</label>
+                    <select id="aiModel">
+                        <option value="doubao-base">豆包基础版</option>
+                        <option value="doubao-pro">豆包专业版</option>
+                        <option value="gpt-3.5-turbo">GPT-3.5 Turbo</option>
+                        <option value="gpt-4">GPT-4</option>
+                    </select>
+                </div>
+                <div class="setting-item">
+                    <label for="apiKey">API密钥：</label>
+                    <input type="password" id="apiKey" placeholder="请输入您的API密钥">
+                    <p style="font-size: 12px; color: #666; margin-top: 5px;">API密钥将安全存储在本地浏览器中</p>
+                </div>
+                <button onclick="saveSettings()">保存设置</button>
+            </div>
+        </div>
+
+        <!-- 文件上传标签页 -->
+        <div id="fileUpload" class="tab-content active">
+            <div class="upload-sections">
+            <div class="section">
+                <h2>银行流水和回单</h2>
+                <div class="upload-area" onclick="document.getElementById('bankFiles').click()">
+                    <p>点击或拖拽文件到此处上传</p>
+                    <p>支持Excel和PDF格式</p>
+                    <input type="file" id="bankFiles" multiple accept=".xlsx,.xls,.pdf">
+                </div>
+                <div id="bankFileList" class="file-list"></div>
+            </div>
+
+            <div class="section">
+                <h2>工资表</h2>
+                <div class="upload-area" onclick="document.getElementById('salaryFiles').click()">
+                    <p>点击或拖拽文件到此处上传</p>
+                    <p>支持Excel格式</p>
+                    <input type="file" id="salaryFiles" accept=".xlsx,.xls">
+                </div>
+                <div id="salaryFileList" class="file-list"></div>
+            </div>
+
+            <div class="section">
+                <h2>发票</h2>
+                <div class="upload-area" onclick="document.getElementById('invoiceFiles').click()">
+                    <p>点击或拖拽文件到此处上传</p>
+                    <p>支持PDF和图片格式</p>
+                    <input type="file" id="invoiceFiles" multiple accept=".pdf,.jpg,.jpeg,.png">
+                </div>
+                <div id="invoiceFileList" class="file-list"></div>
+            </div>
+            </div>
+
+            <div style="clear:both;"></div>
+            <div style="width:100%;display:flex;justify-content:center;margin:30px 0 0 0;">
+                <button onclick="processFiles()">处理文件并验证</button>
+            </div>
+        </div>
+
+        <!-- 手动录入标签页 -->
+        <div id="manualEntry" class="tab-content">
+            <div class="section">
+                <h2>交易描述</h2>
+                <textarea id="description" placeholder="请输入交易描述，例如：销售产品收入1000元，收到现金..." style="height: 150px;"></textarea>
+                <button onclick="generateManualEntry()">生成会计分录</button>
+            </div>
+        </div>
+
+        <!-- 数据验证区域 -->
+        <div id="verifySection" class="verify-section">
+            <h2>数据验证</h2>
+            <p>请确认以下提取的数据是否正确：</p>
+
+            <div id="bankSummary" class="summary-item">
+                <h3>银行流水摘要</h3>
+                <p><strong>期初余额：</strong><span id="beginningBalance">--</span></p>
+                <p><strong>期末余额：</strong><span id="endingBalance">--</span></p>
+            </div>
+
+            <div id="salarySummary" class="summary-item">
+                <h3>工资表摘要</h3>
+                <p><strong>总人数：</strong><span id="totalEmployees">--</span></p>
+                <p><strong>总金额：</strong><span id="totalSalary">--</span>元</p>
+            </div>
+
+            <div id="invoiceSummary" class="summary-item">
+                <h3>发票摘要</h3>
+                <p><strong>进项发票：</strong><span id="inputInvoiceCount">--</span>张，金额<span id="inputInvoiceAmount">--</span>元</p>
+                <p><strong>销项发票：</strong><span id="outputInvoiceCount">--</span>张，金额<span id="outputInvoiceAmount">--</span>元</p>
+            </div>
+
+            <div style="margin-top: 20px;">
+                <button onclick="confirmData()">确认无误，生成分录</button>
+                <button onclick="cancelVerification()" style="background-color: #f44336;">取消</button>
+            </div>
+        </div>
+
+        <!-- 状态消息区域 -->
+        <div id="statusMessage" class="status-message"></div>
+        <div id="loadingMessage" class="status-message loading" style="display: none;">处理中，请稍候...</div>
+
+        <!-- 结果区域 -->
+        <div id="resultSection" class="section" style="display: none;">
+            <h2>生成的会计分录</h2>
+            <div id="entryDetails"></div>
+        </div>
+
+        <!-- 系统日志区域 -->
+        <div class="log-container">
+            <h3>系统日志</h3>
+            <div id="error-log" class="log-content"></div>
+        </div>
+    </div>
+
+    <script>
+        // 文件上传处理
+        let uploadedFiles = { bank: [], salary: [], invoice: [] };
+
+        document.getElementById('bankFiles').addEventListener('change', function(e) {
+            handleFileUpload(e, 'bank', 'bankFileList');
+            // 自动解析银行流水文件
+            if (e.target.files.length > 0) {
+                parseBankFileUpload(e.target.files[0]);
+            }
+        });
+
+        document.getElementById('salaryFiles').addEventListener('change', function(e) {
+            handleFileUpload(e, 'salary', 'salaryFileList');
+        });
+
+        document.getElementById('invoiceFiles').addEventListener('change', function(e) {
+            handleFileUpload(e, 'invoice', 'invoiceFileList');
+        });
+
+        function handleFileUpload(event, category, listId) {
+            const files = event.target.files;
+            const fileList = document.getElementById(listId);
+
+            if (!files.length) return; // 无文件则返回
+
+            appendLog(`开始上传${category === 'bank' ? '银行流水' : category === 'salary' ? '工资表' : '发票'}文件: ${files[0].name}`);
+
+            for (let i = 0; i < files.length; i++) {
+                const file = files[i];
+                uploadedFiles[category].push(file);
+
+                const fileItem = document.createElement('div');
+                fileItem.className = 'file-item';
+                fileItem.innerHTML = `
+                    <span>${file.name} (${formatFileSize(file.size)})</span>
+                    <button onclick="removeFile('${category}', '${file.name}', this)">移除</button>
+                `;
+                fileList.appendChild(fileItem);
+            }
+
+            // 重置input以允许重复上传相同文件
+            event.target.value = '';
+            appendLog(`${category === 'bank' ? '银行流水' : category === 'salary' ? '工资表' : '发票'}文件上传成功`);
+        }
+
+        function removeFile(category, fileName, element) {
+            uploadedFiles[category] = uploadedFiles[category].filter(file => file.name !== fileName);
+            element.parentElement.remove();
+            appendLog(`已移除${category === 'bank' ? '银行流水' : category === 'salary' ? '工资表' : '发票'}文件: ${fileName}`);
+        }
+
+        function formatFileSize(bytes) {
+            if (bytes < 1024) return bytes + ' B';
+            else if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB';
+            else return (bytes / 1048576).toFixed(1) + ' MB';
+        }
+
+        // 标签页切换
+        function openTab(evt, tabName) {
+            appendLog(`切换到${tabName === 'fileUpload' ? '文件上传' : tabName === 'manualEntry' ? '手动录入' : 'AI设置'}标签页`);
+            const tabContents = document.getElementsByClassName("tab-content");
+            for (let i = 0; i < tabContents.length; i++) {
+                tabContents[i].classList.remove("active");
+            }
+
+            const tabs = document.getElementsByClassName("tab");
+            for (let i = 0; i < tabs.length; i++) {
+                tabs[i].classList.remove("active");
+            }
+
+            document.getElementById(tabName).classList.add("active");
+            evt.currentTarget.classList.add("active");
+        }
+
+        // 文件处理和数据验证
+        function processFiles() {
+            if (uploadedFiles.bank.length === 0) {
+                showMessage('请上传银行流水文件', 'error');
+                appendLog('文件处理失败：未上传银行流水', true);
+                return;
+            }
+            parseBankFileUpload(uploadedFiles.bank[0]);
+        }
+
+        // 确认数据并生成分录
+        function confirmData() {
+            showLoading();
+            appendLog('用户确认数据无误，开始生成分录...');
+
+            // 拼接交易描述
+            let desc = '';
+            if (uploadedFiles.bank.length > 0) {
+                desc += `银行流水期初余额${document.getElementById('beginningBalance').textContent}，期末余额${document.getElementById('endingBalance').textContent}。`;
+            }
+            if (uploadedFiles.salary.length > 0) {
+                desc += `工资总人数${document.getElementById('totalEmployees').textContent}，总金额${document.getElementById('totalSalary').textContent}元。`;
+            }
+            if (uploadedFiles.invoice.length > 0) {
+                desc += `进项发票${document.getElementById('inputInvoiceCount').textContent}张，金额${document.getElementById('inputInvoiceAmount').textContent}元；销项发票${document.getElementById('outputInvoiceCount').textContent}张，金额${document.getElementById('outputInvoiceAmount').textContent}元。`;
+            }
+
+            fetch('/api/entries', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    transaction_description: desc
+                })
+            })
+            .then(response => {
+                if (!response.ok) throw new Error('生成分录失败');
+                return response.json();
+            })
+            .then(data => {
+                hideLoading();
+                const resultSection = document.getElementById('resultSection');
+                const entryDetails = document.getElementById('entryDetails');
+                entryDetails.innerHTML = `
+                    <div class="summary-item">
+                        <p><strong>交易描述：</strong>${data.transaction_description}</p>
+                        <p><strong>借方账户：</strong>${data.debit_account} - ${data.debit_amount}元</p>
+                        <p><strong>贷方账户：</strong>${data.credit_account} - ${data.credit_amount}元</p>
+                        <p><strong>状态：</strong>${data.status}</p>
+                        ${data.review_notes ? `<p><strong>审核备注：</strong>${data.review_notes}</p>` : ''}
+                    </div>
+                `;
+                resultSection.style.display = 'block';
+                showMessage('会计分录生成成功', 'success');
+                appendLog('会计分录生成成功');
+            })
+            .catch(error => {
+                hideLoading();
+                showMessage(error.message, 'error');
+                appendLog(`生成分录错误: ${error.message}`, true);
+            });
+        }
+
+        // 手动生成分录
+        function generateManualEntry() {
+            const description = document.getElementById('description').value;
+            const aiModel = document.getElementById('aiModel').value;
+            const apiKey = document.getElementById('apiKey').value;
+            
+            if (!description.trim()) {
+                showMessage('请输入交易描述', 'error');
+                appendLog('手动生成分录失败：未输入交易描述', true);
+                return;
+            }
+            
+            if (!apiKey.trim()) {
+                showMessage('请先在AI设置中输入API密钥', 'error');
+                appendLog('手动生成分录失败：未输入API密钥', true);
+                return;
+            }
+            
+            showLoading();
+            appendLog('开始手动生成分录...');
+            
+            // 调用API生成分录
+            fetch('/api/entries', { // 修正URL：原代码中是http://localhost:5000/api/entries，避免硬编码
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-API-Key': apiKey
+                },
+                body: JSON.stringify({
+                    transaction_description: description,
+                    ai_model: aiModel
+                })
+            })
+            .then(response => {
+                if (!response.ok) throw new Error('生成会计分录失败，请重试');
+                return response.json();
+            })
+            .then(data => {
+                hideLoading();
+                const resultSection = document.getElementById('resultSection');
+                const entryDetails = document.getElementById('entryDetails');
+
+                entryDetails.innerHTML = `
+                    <div class="summary-item">
+                        <p><strong>交易描述：</strong>${data.transaction_description}</p>
+                        <p><strong>借方账户：</strong>${data.debit_account} - ${data.debit_amount}元</p>
+                        <p><strong>贷方账户：</strong>${data.credit_account} - ${data.credit_amount}元</p>
+                        <p><strong>状态：</strong>${data.status}</p>
+                        ${data.review_notes ? `<p><strong>审核备注：</strong>${data.review_notes}</p>` : ''}
+                    </div>
+                `;
+
+                resultSection.style.display = 'block';
+                showMessage('会计分录生成成功', 'success');
+                appendLog('手动生成分录成功');
+            })
+            .catch(error => {
+                hideLoading();
+                showMessage(error.message, 'error');
+                appendLog(`手动生成分录错误: ${error.message}`, true);
+            });
+        }
+
+        // 生成会计分录通用函数（修正uploadedFileTypes未定义问题）
+        async function generateEntries() {
+            try {
+                // 从uploadedFiles中提取已上传的文件类型
+                const uploadedFileTypes = [];
+                if (uploadedFiles.bank.length > 0) uploadedFileTypes.push('bank');
+                if (uploadedFiles.salary.length > 0) uploadedFileTypes.push('salary');
+                if (uploadedFiles.invoice.length > 0) uploadedFileTypes.push('invoice');
+                
+                appendLog('开始生成会计分录...');
+                const response = await fetch('/api/entries', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${document.getElementById('apiKey').value}`
+                    },
+                    body: JSON.stringify({
+                        transaction_description: document.getElementById('transactionDesc').value,
+                        created_by: document.getElementById('username').value
+                    })
+                });
+                
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.message || `HTTP错误: ${response.status}`);
+                }
+                
+                const data = await response.json();
+                appendLog('会计分录生成成功');
+                renderEntries(data);
+            } catch (error) {
+                appendLog(`错误: ${error.message}`, true);
+                console.error('生成分录失败:', error);
+            }
+        }
+
+        // 渲染分录（补充缺失的函数）
+        function renderEntries(data) {
+            const entryDetails = document.getElementById('entryDetails');
+            entryDetails.innerHTML = '';
+            
+            if (data.bank_entries) {
+                entryDetails.innerHTML += `<h3>银行流水分录</h3>`;
+                data.bank_entries.forEach(entry => {
+                    entryDetails.innerHTML += `
+                        <div class="summary-item">
+                            <p><strong>借方：</strong>${entry.debit_account} (${entry.debit_amount}元)</p>
+                            <p><strong>贷方：</strong>${entry.credit_account} (${entry.credit_amount}元)</p>
+                        </div>
+                    `;
+                });
+            }
+            
+            // 其他类型分录的渲染...
+        }
+
+        // 辅助函数
+        function showMessage(text, type) {
+            const messageEl = document.getElementById('statusMessage');
+            messageEl.textContent = text;
+            messageEl.className = 'status-message ' + type;
+            messageEl.style.display = 'block';
+            setTimeout(() => messageEl.style.display = 'none', 5000);
+        }
+
+        function showLoading() {
+            document.getElementById('loadingMessage').style.display = 'block';
+        }
+
+        function hideLoading() {
+            document.getElementById('loadingMessage').style.display = 'none';
+        }
+
+        function cancelVerification() {
+            document.getElementById('verifySection').style.display = 'none';
+            appendLog('用户取消数据验证');
+        }
+        
+        // AI设置相关功能
+        function saveSettings() {
+            const aiModel = document.getElementById('aiModel').value;
+            const apiKey = document.getElementById('apiKey').value;
+            
+            if (!apiKey.trim()) {
+                showMessage('请输入API密钥', 'error');
+                appendLog('保存设置失败：未输入API密钥', true);
+                return;
+            }
+            
+            // 保存到本地存储
+            localStorage.setItem('aiModel', aiModel);
+            localStorage.setItem('apiKey', apiKey);
+            
+            showMessage('AI模型设置已保存', 'success');
+            appendLog('AI模型设置保存成功');
+        }
+        
+        function loadSettings() {
+            const aiModel = localStorage.getItem('aiModel');
+            const apiKey = localStorage.getItem('apiKey');
+            
+            if (aiModel) {
+                document.getElementById('aiModel').value = aiModel;
+            }
+            if (apiKey) {
+                document.getElementById('apiKey').value = apiKey;
+            }
+            appendLog('已加载保存的AI设置');
+        }
+        
+        // 日志记录函数
+        function appendLog(message, isError = false) {
+            const logElement = document.getElementById('error-log');
+            const timestamp = new Date().toLocaleTimeString();
+            const logEntry = document.createElement('div');
+            logEntry.className = isError ? 'log-error' : 'log-info';
+            logEntry.innerHTML = `[${timestamp}] ${message}`;
+            logElement.appendChild(logEntry);
+            // 自动滚动到底部
+            logElement.scrollTop = logElement.scrollHeight;
+        }
+        
+        // 页面加载时加载设置
+        window.onload = function() {
+            loadSettings();
+            appendLog('系统已加载完成');
+        };
+
+        // 解析银行流水Excel/PDF并展示分录
+        function parseBankFileUpload(file) {
+            showLoading();
+            appendLog('开始解析银行流水文件: ' + file.name);
+            const formData = new FormData();
+            formData.append('file', file);
+            fetch('/api/parse-bank-file', {
+                method: 'POST',
+                body: formData
+            })
+            .then(res => res.json())
+            .then(data => {
+                hideLoading();
+                if (data.error) {
+                    showMessage(data.error, 'error');
+                    appendLog('解析失败: ' + data.error, true);
+                    return;
+                }
+                renderBankEntries(data.entries || []);
+                showMessage('银行流水分录生成成功', 'success');
+                appendLog('银行流水分录生成成功');
+            })
+            .catch(err => {
+                hideLoading();
+                showMessage('解析银行流水失败', 'error');
+                appendLog('解析银行流水失败: ' + err.message, true);
+            });
+        }
+
+        // 渲染银行流水分录
+        function renderBankEntries(entries) {
+            const resultSection = document.getElementById('resultSection');
+            const entryDetails = document.getElementById('entryDetails');
+            if (!entries.length) {
+                entryDetails.innerHTML = '<div class="summary-item">未生成任何分录</div>';
+            } else {
+                entryDetails.innerHTML = entries.map(e => `
+                    <div class="summary-item">
+                        <p><strong>交易描述：</strong>${e.transaction_description}</p>
+                        <p><strong>借方账户：</strong>${e.debit_account} - ${e.debit_amount}元</p>
+                        <p><strong>贷方账户：</strong>${e.credit_account} - ${e.credit_amount}元</p>
+                        <p><strong>状态：</strong>${e.status || ''}</p>
+                        ${e.review_notes ? `<p><strong>审核备注：</strong>${e.review_notes}</p>` : ''}
+                    </div>
+                `).join('');
+            }
+            resultSection.style.display = 'block';
+        }
+    </script>
+</body>
+</html>
